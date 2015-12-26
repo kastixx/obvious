@@ -35,7 +35,64 @@ local function escape_regexp(string)
   })
 end
 
+if check_state then
+  local lfs = err
+
+  function iterate_processes(process)
+    local process_escaped = escape_regexp(process)
+
+    local function yield_process()
+      for dir in lfs.dir('/proc') do
+        if tonumber(pid) ~= nil then
+          local f, err = io.open("/proc/" .. pid .. "/cmdline")
+          if f then
+            local cmdline = f:read("*all")
+            f:close()
+            if cmdline ~= "" then
+              coroutine.yield(cmdline)
+            end
+          end
+        end
+      end
+    end
+
+    return coroutine.wrap(yield_process)
+  end
+
+else
+
+  function iterate_processes()
+    fd = io.popen("ps -ewwo args")
+    if fd then
+      return fd:lines()
+    end
+
+    -- return an empty function in case of failure
+    return function () end
+  end
+
+end
+
 local processCache = {}
+
+function processCache:init()
+  local cache = {}
+  self._cache = cache
+  
+  for cmdline in iterate_processes() do
+    table.insert(cache, cmdline)
+  end
+
+  return self
+end
+
+function find_process(process)
+  for cmdline in iterate_processes() do
+    if cmdline:find(process) then
+      return cmdline
+    end
+  end
+end
 
 function processCache:find(process)
   local process_escaped = escape_regexp(process)
@@ -49,90 +106,20 @@ function processCache:find(process)
   return true
 end
 
-if check_state then
-  local lfs = err
-
-  local function read_cmdline(pid)
-    if tonumber(pid) ~= nil then
-      local f, err = io.open("/proc/" .. pid .. "/cmdline")
-      if f then
-        local cmdline = f:read("*all")
-        f:close()
-        if cmdline ~= "" then
-          return cmdline
-        end
-      end
-    end
+function processCache:run_once(process, cmd)
+  if not self:find(process) then
+    return awful.util.spawn_with_shell(cmd or process)
   end
+end
 
-  function processCache:init()
-    local cache = {}
-    self._cache = cache
-
-    for dir in lfs.dir("/proc") do
-      local cmdline = read_cmdline(dir)
-      if cmdline then
-          table.insert(cache, cmdline)
-      end
-    end
-
-    return self
+function run_once(process, cmd)
+  if not find_process(process) then
+    return awful.util.spawn_with_shell(cmd or process)
   end
+end
 
-  function find_process(process)
-    local process_escaped = escape_regexp(process)
-
-    local function yield_process()
-      for dir in lfs.dir('/proc') do
-        local cmdline = read_cmdline(dir)
-        if cmdline then
-            coroutine.yield(cmdline)
-        end
-      end
-    end
-
-    for cmdline in coroutine.wrap(yield_process) do
-      if cmdline:find(process_escaped) then
-        return cmdline
-      end
-    end
-  end
-
-else
-  function processCache:init()
-    local cache = {}
-    self._cache = cache
-
-    fd = io.popen("ps -ewwo args")
-    if not fd then return self end
-
-    for line in fd:lines() do
-      table.insert(cache, line)
-    end
-    
-    return self
-  end
-
-  function find_process(process)
-    local process_escaped = escape_regexp(process)
-
-    local fd = io.popen('ps -ewwo args')
-    if not fd then
-      return
-    end
-
-    local cmdline = nil
-
-    for l in fd:lines() do
-      if l:find(process_escaped) then
-        cmdline = l
-        break
-      end
-    end
-
-    fd:close()
-    return cmdline
-  end
+function get_process_cache()
+  return processCache:init()
 end
 
 -- vim:ft=lua:ts=2:sw=2:sts=2:tw=80:et
