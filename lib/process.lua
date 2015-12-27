@@ -132,4 +132,6 @@ function get_process_cache()
   return processCache:init()
 end
 
+setmetatable(_M, { __call = function (_, ...) return get_process_cache(...) end })
+
 -- vim:ft=lua:ts=2:sw=2:sts=2:tw=80:et
