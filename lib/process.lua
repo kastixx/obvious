@@ -92,23 +92,21 @@ function processCache:init()
   return self
 end
 
-function find_process(process)
+function find_process(process_regexp)
   if not iterate_processes then
     _init_module()
   end
   
   for cmdline in iterate_processes() do
-    if cmdline:find(process) then
+    if cmdline:find(process_regexp) then
       return cmdline
     end
   end
 end
 
-function processCache:find(process)
-  local process_escaped = escape_regexp(process)
-
+function processCache:find(process_regexp)
   for i, p in ipairs(self._cache) do
-    if p:find(process_escaped) then
+    if p:find(process_regexp) then
       return nil
     end
   end
@@ -116,15 +114,28 @@ function processCache:find(process)
   return true
 end
 
-function processCache:run_once(process, cmd)
-  if not self:find(process) then
-    return awful.util.spawn_with_shell(cmd or process)
+function processCache:run_once(cmd, process_regexp)
+  if not process_regexp then
+    process_regexp = escape_regexp(cmd)
+  end
+
+  if not self:find(process_regexp) then
+    return awful.util.spawn_with_shell(cmd)
   end
 end
 
-function run_once(process, cmd)
-  if not find_process(process) then
-    return awful.util.spawn_with_shell(cmd or process)
+-- usage: obvious.lib.process.run_once(command[, process_regexp)
+-- command - a command to run
+-- process_regexp - an optional regexp to match the current
+--   process table against (command itself will be searched for
+--   by default)
+function run_once(cmd, process_regexp)
+  if not process_regexp then
+    process_regexp = escape_regexp(cmd)
+  end
+
+  if not find_process(process_regexp) then
+    return awful.util.spawn_with_shell(cmd)
   end
 end
 
