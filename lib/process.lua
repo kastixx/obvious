@@ -77,7 +77,7 @@ end
 
 local processCache = {}
 
-function processCache:init()
+function processCache:update()
   local cache = {}
   self._cache = cache
 
@@ -88,8 +88,6 @@ function processCache:init()
   for cmdline in iterate_processes() do
     table.insert(cache, cmdline)
   end
-
-  return self
 end
 
 function find_process(process_regexp)
@@ -105,6 +103,10 @@ function find_process(process_regexp)
 end
 
 function processCache:find(process_regexp)
+  if not self._cache then
+    self:update()
+  end
+
   for i, p in ipairs(self._cache) do
     if p:find(process_regexp) then
       return nil
@@ -140,7 +142,7 @@ function run_once(cmd, process_regexp)
 end
 
 function get_process_cache()
-  return processCache:init()
+  return processCache
 end
 
 setmetatable(_M, { __call = function (_, ...) return get_process_cache(...) end })
